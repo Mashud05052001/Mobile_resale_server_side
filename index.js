@@ -42,14 +42,14 @@ const run = async () => {
         const mobileCollections = client.db('mobile_vend').collection('mobile_collections');
 
         // middleware
-        const verifyAdmin = async (req, res, next) => {
+        const verifyRole = async (req, res, next) => {
             const email = req?.decoded?.email;
             const user = await usersCollection.findOne({ email: email });
             if (user?.role === 'admin') {
                 req.role = "admin";
             }
-            else if (user?.role === 'seller') {
-                req.role = "admin";
+            if (user?.role === 'seller') {
+                req.role = "seller";
             }
             next();
         }
@@ -73,7 +73,7 @@ const run = async () => {
             const result = await usersCollection.insertOne(userInfo);
             res.send({ result, email });
         })
-        app.get('/users', verifyJwt, verifyAdmin, async (req, res) => {
+        app.get('/users', verifyJwt, verifyRole, async (req, res) => {
             const email = req.query.email, joinfrom = req.query.joinfrom;
             if (req?.query?.need) {
                 if (req?.role === 'admin' && req?.query?.need === 'seller') {
@@ -95,12 +95,12 @@ const run = async () => {
             const users = await usersCollection.find({}).toArray();
             res.send(users);
         })
-        app.delete('/users', verifyJwt, verifyAdmin, async (req, res) => {
+        app.delete('/users', verifyJwt, verifyRole, async (req, res) => {
             const id = req.query.id;
             const result = await usersCollection.deleteOne({ _id: ObjectId(id) });
             res.send(result);
         })
-        app.put('/users', verifyJwt, verifyAdmin, async (req, res) => {
+        app.put('/users', verifyJwt, verifyRole, async (req, res) => {
             const query = { _id: ObjectId(req.query.id) };
             const updateItem = { $set: { status: 'verified' } }
             const result = await usersCollection.updateOne(query, updateItem);
@@ -110,12 +110,32 @@ const run = async () => {
             const result = await mobileCategories.find({}).toArray();
             res.send(result);
         })
-        app.post('/allPhones', async (req, res) => {
+        app.post('/allPhones', verifyJwt, verifyRole, async (req, res) => {
             const phoneInfo = req.body;
-            const result = await mobileCollections.insertOne(phoneInfo);
+            if (req?.role === 'seller') {
+                const result = await mobileCollections.insertOne(phoneInfo);
+                res.send(result);
+            }
+        })
+        app.get('/allPhones', verifyJwt, async (req, res) => {
+            const userId = req.query.id;
+
+            if (userId) {
+                const result = await mobileCollections.find({ sellerDbId: userId }).toArray();
+                res.send(result);
+                return;
+            }
+            const result = await mobileCollections.find({}).toArray();
             res.send(result);
         })
+        app.delete('/allPhones', verifyJwt, verifyRole, async (req, res) => {
+            const phoneId = req.query.id;
+            if (phoneId && (req?.role === 'seller' || req?.role === 'admin')) {
+                const result = await mobileCollections.deleteOne({ _id: ObjectId(phoneId) });
+                res.send(result);
 
+            }
+        })
 
 
     }
