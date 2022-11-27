@@ -54,6 +54,12 @@ const run = async () => {
             next();
         }
 
+        //partially update 
+        // app.get('/allPhones', async (req, res) => {
+        //     const result = await mobileCollections.updateMany({}, { $set: { categoryId: "6380e692345d495b77482fb9" } }, { upsert: true });
+        //     res.send(result);
+        // })
+
 
 
         app.get('/jwt', async (req, res) => {
@@ -75,6 +81,7 @@ const run = async () => {
         })
         app.get('/users', verifyJwt, verifyRole, async (req, res) => {
             const email = req.query.email, joinfrom = req.query.joinfrom;
+            const id = req.query.id;
             if (req?.query?.need) {
                 if (req?.role === 'admin' && req?.query?.need === 'seller') {
                     const sellers = await usersCollection.find({ role: 'seller' }).toArray();
@@ -86,6 +93,12 @@ const run = async () => {
                     res.send(sellers);
                     return;
                 }
+
+            }
+            if (id) {
+                const user = await usersCollection.findOne({ _id: ObjectId(id) });
+                res.send(user);
+                return;
             }
             if (email && joinfrom) {
                 const user = await usersCollection.findOne({ $and: [{ email: email }, { joinFrom: joinfrom }] })
@@ -119,7 +132,6 @@ const run = async () => {
         })
         app.get('/allPhones', verifyJwt, async (req, res) => {
             const userId = req.query.id;
-
             if (userId) {
                 const result = await mobileCollections.find({ sellerDbId: userId }).toArray();
                 res.send(result);
@@ -135,6 +147,17 @@ const run = async () => {
                 res.send(result);
 
             }
+        })
+        app.get('/singleCategory/:id', verifyJwt, async (req, res) => {
+            const id = req.params.id;
+            const result = await mobileCollections.find({ categoryId: id }).toArray();
+            res.send(result);
+        })
+        app.get('/singlePhone/:id', verifyJwt, async (req, res) => {
+            const phoneId = req.params.id;
+            const result = await mobileCollections.findOne({ _id: ObjectId(phoneId) });
+            res.send(result);
+
         })
 
 
