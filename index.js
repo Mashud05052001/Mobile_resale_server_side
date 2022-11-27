@@ -95,6 +95,7 @@ const run = async () => {
                 }
 
             }
+
             if (id) {
                 const user = await usersCollection.findOne({ _id: ObjectId(id) });
                 res.send(user);
