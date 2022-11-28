@@ -59,6 +59,10 @@ const run = async () => {
         //     const result = await mobileCollections.updateMany({}, { $set: { categoryId: "6380e692345d495b77482fb9" } }, { upsert: true });
         //     res.send(result);
         // })
+        // app.get('/updatePhones', async (req, res) => {
+        //     const result = await mobileCollections.updateMany({}, { $set: { report: "0" } }, { upsert: true });
+        //     res.send(result);
+        // })
 
 
 
@@ -131,19 +135,35 @@ const run = async () => {
                 res.send(result);
             }
         })
-        app.get('/allPhones', verifyJwt, async (req, res) => {
+        app.get('/allPhones', async (req, res) => {
             const userId = req.query.id;
+            const condition = req.query.condition;
             if (userId) {
                 const result = await mobileCollections.find({ sellerDbId: userId }).toArray();
+                res.send(result);
+                return;
+            }
+            if (condition === 'report') {
+                const result = await mobileCollections.find({ report: { $ne: "0" } }).toArray();
                 res.send(result);
                 return;
             }
             const result = await mobileCollections.find({}).toArray();
             res.send(result);
         })
+        app.patch('/allPhones', async (req, res) => {
+            const id = req.query.id;
+            const findOneItem = await mobileCollections.findOne({ _id: ObjectId(id) })
+            const count = JSON.stringify(parseInt(findOneItem.report) + 1);
+            // console.log(typeof (count))
+            const result = await mobileCollections.updateOne({ _id: ObjectId(id) }, { $set: { report: count } })
+            res.send(result);
+
+        })
         app.delete('/allPhones', verifyJwt, verifyRole, async (req, res) => {
             const phoneId = req.query.id;
             if (phoneId && (req?.role === 'seller' || req?.role === 'admin')) {
+                console.log(1)
                 const result = await mobileCollections.deleteOne({ _id: ObjectId(phoneId) });
                 res.send(result);
 
@@ -154,7 +174,7 @@ const run = async () => {
             const result = await mobileCollections.find({ categoryId: id }).toArray();
             res.send(result);
         })
-        app.get('/singlePhone/:id', verifyJwt, async (req, res) => {
+        app.get('/singlePhone/:id', async (req, res) => {
             const phoneId = req.params.id;
             const result = await mobileCollections.findOne({ _id: ObjectId(phoneId) });
             res.send(result);
