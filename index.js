@@ -40,6 +40,8 @@ const run = async () => {
         const usersCollection = client.db("mobile_vend").collection("users");
         const mobileCategories = client.db('mobile_vend').collection('mobile_categories');
         const mobileCollections = client.db('mobile_vend').collection('mobile_collections');
+        const orderCollections = client.db('mobile_vend').collection('order_collections');
+        const wiselistCollection = client.db('mobile_vend').collection('wiselist_collections');
 
         // middleware
         const verifyRole = async (req, res, next) => {
@@ -60,7 +62,7 @@ const run = async () => {
         //     res.send(result);
         // })
         // app.get('/updatePhones', async (req, res) => {
-        //     const result = await mobileCollections.updateMany({}, { $set: { report: "0" } }, { upsert: true });
+        //     const result = await mobileCollections.updateMany({}, { $set: { promoteStatus: false } }, { upsert: true });
         //     res.send(result);
         // })
 
@@ -71,6 +73,16 @@ const run = async () => {
             const token = jwt.sign({ email: email }, process.env.Jwt_Random_Bytes, { expiresIn: '1d' });
             res.send({ token });
         })
+
+
+        /*
+        ____________________________________________________
+
+                            Users section
+                
+        ____________________________________________________
+        */
+
 
         app.post('/users', async (req, res) => {
             const userInfo = req.body;
@@ -124,10 +136,31 @@ const run = async () => {
             const result = await usersCollection.updateOne(query, updateItem);
             res.send(result);
         })
+
+        /*
+        ____________________________________________________
+
+                        Category section
+        
+        ____________________________________________________
+        */
+
+
         app.get('/categories', async (req, res) => {
             const result = await mobileCategories.find({}).toArray();
             res.send(result);
         })
+
+
+        /*
+        ____________________________________________________
+
+                            All Phone section
+                
+        ____________________________________________________
+        */
+
+
         app.post('/allPhones', verifyJwt, verifyRole, async (req, res) => {
             const phoneInfo = req.body;
             if (req?.role === 'seller') {
@@ -153,6 +186,13 @@ const run = async () => {
         })
         app.patch('/allPhones', async (req, res) => {
             const id = req.query.id;
+            const promot = req.query.promot;
+            if (promot) {
+                console.log(promot);
+                const result = await mobileCollections.updateOne({ _id: ObjectId(promot) }, { $set: { promoteStatus: true } })
+                res.send(result);
+                return;
+            }
             const findOneItem = await mobileCollections.findOne({ _id: ObjectId(id) })
             const count = JSON.stringify(parseInt(findOneItem.report) + 1);
             // console.log(typeof (count))
@@ -169,6 +209,16 @@ const run = async () => {
 
             }
         })
+
+        /*
+        ____________________________________________________
+
+                Single Phone & Single Category section
+                
+        ____________________________________________________
+        */
+
+
         app.get('/singleCategory/:id', verifyJwt, async (req, res) => {
             const id = req.params.id;
             const result = await mobileCollections.find({ categoryId: id }).toArray();
@@ -179,6 +229,74 @@ const run = async () => {
             const result = await mobileCollections.findOne({ _id: ObjectId(phoneId) });
             res.send(result);
 
+        })
+
+        /*
+        ____________________________________________________
+
+                          Orders section
+                
+        ____________________________________________________
+        */
+        app.post('/orders', verifyJwt, async (req, res) => {
+            const orderData = req.body;
+            const query = {
+                userId: orderData?.userId,
+                phoneId: orderData?.phoneId,
+            }
+            const isAvailable = await orderCollections.findOne(query);
+            if (isAvailable) {
+                res.send({ message: "alreadyAdded" });
+                return;
+            }
+            const result = await orderCollections.insertOne(orderData);
+            res.send(result);
+        })
+        app.get('/orders', verifyJwt, async (req, res) => {
+            const userId = req.query.id;
+            const orders = await orderCollections.find({ userId: userId }).toArray();
+            res.send(orders);
+        })
+        app.delete('/orders', verifyJwt, async (req, res) => {
+            const id = req.query.id;
+            console.log(id)
+            const result = await orderCollections.deleteOne({ _id: ObjectId(id) });
+            res.send(result);
+        })
+
+        /*
+        ____________________________________________________
+
+                        WiseList section
+        
+        ____________________________________________________
+        */
+
+
+        app.post('/wiseList', verifyJwt, async (req, res) => {
+            const wiseListData = req.body;
+            console.log(wiseListData);
+            const query = {
+                userId: wiseListData?.userId,
+                phoneId: wiseListData?.phoneId,
+            }
+            const isAvailable = await wiselistCollection.findOne(query);
+            if (isAvailable) {
+                res.send({ message: "alreadyAdded" });
+                return;
+            }
+            const result = await wiselistCollection.insertOne(wiseListData);
+            res.send(result);
+        })
+        app.get('/wiseList', verifyJwt, async (req, res) => {
+            const userId = req.query.id;
+            const wiseListItems = await wiselistCollection.find({ userId: userId }).toArray();
+            res.send(wiseListItems);
+        })
+        app.delete('/wiseList', verifyJwt, async (req, res) => {
+            const id = req.query.id;
+            const result = await wiselistCollection.deleteOne({ _id: ObjectId(id) });
+            res.send(result);
         })
 
 
