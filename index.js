@@ -4,6 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const stripe = require("stripe")(process.env.Stripe_Secret);
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -42,6 +43,7 @@ const run = async () => {
         const mobileCollections = client.db('mobile_vend').collection('mobile_collections');
         const orderCollections = client.db('mobile_vend').collection('order_collections');
         const wiselistCollection = client.db('mobile_vend').collection('wiselist_collections');
+        const paymentCollection = client.db('mobile_vend').collection('payment_collections');
 
         // middleware
         const verifyRole = async (req, res, next) => {
@@ -171,6 +173,13 @@ const run = async () => {
         app.get('/allPhones', async (req, res) => {
             const userId = req.query.id;
             const condition = req.query.condition;
+            const neededItems = req.query.need;
+            if (neededItems === "promoteItems") {
+                const query = { promoteStatus: true, soldStatus: false }
+                const result = await mobileCollections.find(query).toArray();
+                res.send(result);
+                return;
+            }
             if (userId) {
                 const result = await mobileCollections.find({ sellerDbId: userId }).toArray();
                 res.send(result);
@@ -184,6 +193,13 @@ const run = async () => {
             const result = await mobileCollections.find({}).toArray();
             res.send(result);
         })
+        app.get('/getAllPhones', verifyJwt, verifyRole, async (req, res) => {
+            const id = req.query.sellerId;
+            if (req?.role === 'seller') {
+                const buyers = await mobileCollections.find({ sellerDbId: id, soldStatus: true }).toArray();
+                res.send(buyers);
+            }
+        })
         app.patch('/allPhones', async (req, res) => {
             const id = req.query.id;
             const promot = req.query.promot;
@@ -194,7 +210,7 @@ const run = async () => {
                 return;
             }
             const findOneItem = await mobileCollections.findOne({ _id: ObjectId(id) })
-            const count = JSON.stringify(parseInt(findOneItem.report) + 1);
+            const count = JSON.stringify(parseInt(findOneItem?.report) + 1);
             // console.log(typeof (count))
             const result = await mobileCollections.updateOne({ _id: ObjectId(id) }, { $set: { report: count } })
             res.send(result);
@@ -298,6 +314,70 @@ const run = async () => {
             const result = await wiselistCollection.deleteOne({ _id: ObjectId(id) });
             res.send(result);
         })
+
+
+
+        /*
+      ____________________________________________________
+
+                      Payment section
+      
+      ____________________________________________________
+      */
+
+        app.post('/create-payment-intent', async (req, res) => {
+            const order = req.body;
+            const amount = order.price * 100;
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: "bdt",
+                "payment_method_types": [
+                    'card'
+                ],
+            });
+            res.send({ clientSecret: paymentIntent.client_secret, });
+        })
+
+        app.post('/payments', verifyJwt, async (req, res) => {
+            const payment = req.body;
+            const transactionId = payment?.transactionId;
+            const wiseList = req.query.wiseList;
+            console.log(wiseList, payment);
+            if (wiseList === 'true') {
+                const updateDoc1 = {
+                    userName: payment?.buyerName, userEmail: payment?.buyerEmail, userId: payment?.buyerId, price: payment?.amount, phone: payment?.phoneName,
+                    phoneId: payment?.phoneId, soldStatus: true, transactionId: transactionId
+
+                }
+                console.log(updateDoc1);
+                const deleteFromWiseList = await wiselistCollection.deleteMany({ phoneId: payment?.phoneId });
+                const updateOrderSection = await orderCollections.insertOne(updateDoc1);
+            }
+            else {
+                const query1 = { phoneId: payment?.phoneId }
+                const updateDoc2 = { $set: { soldStatus: true } }
+                const updateOrderSection = await orderCollections.updateMany(query1, updateDoc2);
+                const query2 = { userId: payment?.buyerId, phoneId: payment?.phoneId }
+                const updateDoc4 = { $set: { transactionId: transactionId } }
+                const updateSingleItem = await orderCollections.updateOne(query2, updateDoc4)
+            }
+
+            const query = { _id: ObjectId(payment?.phoneId) };
+            const updatedDoc = {
+                $set: {
+                    soldStatus: true,
+                    buyerId: payment?.buyerId,
+                    buyerName: payment?.buyerName,
+                    buyerEmail: payment?.buyerEmail,
+                }
+            }
+            const updatePhone = await mobileCollections.updateOne(query, updatedDoc);
+
+
+            const result = await paymentCollection.insertOne(payment);
+            res.send(result);
+        })
+
 
 
     }
